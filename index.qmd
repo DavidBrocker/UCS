@@ -1,0 +1,252 @@
+---
+title: "Unfolding Case Study"
+format: html
+editor: visual
+echo: false
+filters: 
+   - lightbox
+lightbox: auto
+---
+
+```{r}
+#| warning: false
+#| message: false
+
+
+# Load Packages
+library(dplyr)
+library(janitor)
+library(ggplot2)
+library(tidyr)
+library(huxtable)
+library(patchwork)
+library(tidytext)
+library(wordcloud2)
+# Add ggtext
+
+# Import Data
+nur <- read.csv("clinical_judge.csv")
+
+# Clean Data
+nur_cln <- 
+  nur |> 
+  clean_names() |> 
+  # Only Look at Completed Observations
+  filter(finished=="1") |>
+  # Only Look at Consented Observations
+  filter(consent=="1") |> 
+  # Select relevant columns
+  select(!start_date:consent) |> 
+  # Rename score columns to subscale names
+  rename(
+   noticing = sc0,
+   interpreting = sc1,
+   responding = sc2,
+   reflecting = sc3
+  ) |> 
+  # Make subscales numeric
+  mutate_at(vars(noticing:reflecting),as.numeric) |> 
+  # Make Nursing CRN's Character and factors
+  mutate(
+    nur_pn = case_when(
+    nur_pn == "1" ~ "NUR 114",
+    nur_pn == "2" ~ "NUR 217",
+    nur_pn == "3" ~ "NUR 307",
+    nur_pn == "4" ~ "NUR 308",
+    nur_pn == "5" ~ "NUR 402",
+    ),
+    gender = case_when(
+      gender == "1" ~ "Male",
+      gender == "2" ~ "Female",
+      gender == "7" ~ "Transgender",
+      gender == "8" ~ "Prefer to self-describe",
+    )
+  )
+```
+
+### Main Takeaway: Not Enough Data to Make Inferences
+
+```{r}
+# Get Distributions by Nursing CRN
+nur_cln |> 
+  group_by(nur_pn) |>
+  count(sort = T) |> 
+  ungroup() |> 
+  mutate(
+    bar = ifelse(nur_pn == "NUR 114","#006F71","grey")) |> 
+  ggplot(aes(nur_pn, n, fill = bar,label = n)) +
+  geom_bar(stat = "identity") +
+  geom_label(
+    vjust = -.4,
+    alpha = .3
+  ) +
+  theme_minimal() +
+  labs(
+    x = "\nNursing CRN",
+    y = "Count\n",
+    title = "Class Distribution",
+    subtitle = "NUR 114 only accounts for 11% of the data"
+  ) +
+  theme(
+    legend.position = "none",
+    axis.text.y = element_blank(),
+    plot.subtitle = element_text(face = "italic"),
+    plot.title = element_text(face = "bold",
+                              size = 15)
+   ) +
+  scale_fill_identity() +
+  ylim(0,8) 
+  
+```
+
+### Demographics:
+
+```{r}
+# Get Gender as a Vector
+gen <- nur_cln$gender
+# Change Multiple Options by Cell
+gen[7] <- "Male"
+gen[19] <- "Transgender"
+
+# Create Table
+gen <- 
+  tabyl(gen) |>
+  adorn_pct_formatting() |> 
+  hux() |> 
+  theme_article()
+
+# Change Column Titles
+gen[1,1:3] <- c("Gender","N","%")
+                
+gen
+```
+
+### Subscale Average by CRN
+
+```{r}
+#| fig-width: 8
+#| fig-height: 8
+nur_cln_by <- 
+  nur_cln |> 
+  select(nur_pn,noticing:reflecting) |> 
+  group_by(nur_pn) |>
+  pivot_longer(
+    cols = c(noticing,interpreting,responding,reflecting),
+    names_to = "subscale",
+    values_to = "score")
+
+# Noticing
+p1 <- 
+  nur_cln_by |> 
+  filter(subscale=="noticing") |> 
+  ggplot(aes(nur_pn,score)) + 
+  geom_jitter(alpha = .3,
+              color = "black") +
+  stat_summary(fun = "mean",
+               geom = "point",
+               size = 5,
+               aes(color = nur_pn)) + 
+  theme_minimal() +
+  scale_color_viridis_d(option = "H") +
+  labs(
+    x = "",
+    y = "Score\n",
+    title = "Noticing"
+  ) +
+  theme(
+    legend.position = "none"
+  )
+
+# Interpret
+p2 <- 
+  nur_cln_by |> 
+  filter(subscale=="interpreting") |> 
+  ggplot(aes(nur_pn,score)) + 
+  geom_jitter(alpha = .3,
+              color = "black") +
+  stat_summary(fun = "mean",
+               geom = "point",
+               size = 5,
+               aes(color = nur_pn)) + 
+  theme_minimal() +
+  scale_color_viridis_d(option = "H") +
+  labs(
+    x = "",
+    y = "Score\n",
+    title = "Interpreting"
+  ) +
+  theme(
+    legend.position = "none"
+  )
+# Respond
+p3 <- 
+  nur_cln_by |> 
+  filter(subscale=="responding") |> 
+  ggplot(aes(nur_pn,score)) + 
+  geom_jitter(alpha = .3,
+              color = "black") +
+  stat_summary(fun = "mean",
+               geom = "point",
+               size = 5,
+               aes(color = nur_pn)) + 
+  theme_minimal() +
+  scale_color_viridis_d(option = "H") +
+  labs(
+    x = "",
+    y = "Score\n",
+    title = "Responding"
+  ) +
+  theme(
+    legend.position = "none"
+  )
+
+# Reflect
+p4 <- 
+  nur_cln_by |> 
+  filter(subscale=="reflecting") |> 
+  ggplot(aes(nur_pn,score)) + 
+  geom_jitter(alpha = .3,
+              color = "black") +
+  stat_summary(fun = "mean",
+               geom = "point",
+               size = 5,
+               aes(color = nur_pn)) + 
+  theme_minimal() +
+  scale_color_viridis_d(option = "H") +
+  labs(
+    x = "",
+    y = "Score\n",
+    title = "Reflecting"
+  ) +
+  theme(
+    legend.position = "none"
+  )  
+
+(p1+p2)/(p3+p4) + 
+  plot_annotation(
+    tag_levels = 'A',
+    title = 'Lasater Clinical Judgment Scores',
+    theme = theme(plot.title = element_text(face = "italic")))
+```
+
+### Free Response
+
+::: panel-tabset
+## Positive
+
+```{r}
+nur_cln |> 
+  filter(rating == "Positive") |> 
+  select(clinical_judgement) |> 
+  rename(`Clinical Judgment Response` = clinical_judgement)
+```
+
+## Negative
+
+```{r}
+nur_cln |> 
+  filter(rating=="Negative") |> 
+  select(clinical_judgement) |> 
+  rename(`Clinical Judgment Response` = clinical_judgement)
+```
+:::
